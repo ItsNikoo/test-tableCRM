@@ -19,11 +19,10 @@ import {
 import {Input} from "@/components/ui/input";
 import {Separator} from "@/components/ui/separator";
 import {SectionHeader} from "@/components/customUI/SectionHeader";
-import {SelectStub} from "@/components/customUI/SelectStub";
 import {useEffect, useState} from "react";
 import {apiRequest} from "@/lib/apiRequest";
 import {toast} from "sonner";
-import {ApiListResponse, Organization, Paybox, PriceType, Warehouse} from "@/types";
+import {ApiListResponse, CartItem, Contragent, Organization, Paybox, PriceType, Product, Warehouse} from "@/types";
 
 
 export default function Home() {
@@ -36,10 +35,28 @@ export default function Home() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [payboxes, setPayboxes] = useState<Paybox[]>([]);
   const [priceTypes, setPriceTypes] = useState<PriceType[]>([]);
-  const [products, setProducts] = useState([]);
+  const [products, setProducts] = useState<Product[]>([]);
+
+  const [productSearch, setProductSearch] = useState("");
 
   const [isDictionariesLoading, setIsDictionariesLoading] = useState(false);
   const [dictionariesError, setDictionariesError] = useState("");
+
+  const [phoneQuery, setPhoneQuery] = useState("");
+  const [contragent, setContragent] = useState<Contragent | null>(null);
+  const [isPhoneLoading, setIsPhoneLoading] = useState(false);
+  const [phoneError, setPhoneError] = useState("");
+
+  const [cart, setCart] = useState<CartItem[]>([]);
+
+  const filteredProducts = products.filter((p) => {
+    const q = productSearch.toLowerCase();
+    return (
+      p.name.toLowerCase().includes(q) ||
+      p.code?.toLowerCase().includes(q) ||
+      p.barcodes?.some((b) => b.includes(q))
+    );
+  });
 
   useEffect(() => {
     if (!token) return;
@@ -54,17 +71,20 @@ export default function Home() {
           warehousesData,
           payboxesData,
           priceTypesData,
+          productsData,
         ] = await Promise.all([
           apiRequest<ApiListResponse<Organization>>("organizations/", {token}),
           apiRequest<ApiListResponse<Warehouse>>("warehouses/", {token}),
           apiRequest<ApiListResponse<Paybox>>("payboxes/", {token}),
           apiRequest<ApiListResponse<PriceType>>("price_types/", {token}),
+          apiRequest<ApiListResponse<Product>>("nomenclature/", {token}),
         ]);
 
         setOrganizations(organizationsData.result);
         setWarehouses(warehousesData.result);
         setPayboxes(payboxesData.result);
         setPriceTypes(priceTypesData.result);
+        setProducts(productsData.result);
       } catch (error) {
         setDictionariesError("Не удалось загрузить справочники");
         console.error(error);
@@ -89,12 +109,63 @@ export default function Home() {
       setIsConnected(false);
       const message = error instanceof Error ? error.message : "Неверный токен";
       toast.error(message);
-      console.error("Connect error:", message);
     } finally {
       setIsLoading(false)
     }
-
   }
+
+  async function handlePhoneSearch(phone: string) {
+    setPhoneQuery(phone);
+    setContragent(null);
+    setPhoneError("");
+
+    if (phone.length < 6) return;
+
+    setIsPhoneLoading(true);
+    try {
+      const data = await apiRequest<ApiListResponse<Contragent>>("contragents/", {
+        token,
+        method: "GET",
+      });
+      const found = data.result.find((c) =>
+        c.phone?.replace(/\D/g, "").includes(phone.replace(/\D/g, ""))
+      );
+      if (found) {
+        setContragent(found);
+      } else {
+        setPhoneError("Клиент не найден");
+      }
+    } catch {
+      setPhoneError("Ошибка поиска");
+    } finally {
+      setIsPhoneLoading(false);
+    }
+  }
+
+  function handleAddToCart(product: Product) {
+    setCart((prev) => {
+      const existing = prev.find((i) => i.product.id === product.id);
+      if (existing) {
+        return prev.map((i) =>
+          i.product.id === product.id ? {...i, quantity: i.quantity + 1} : i
+        );
+      }
+      return [...prev, {product, quantity: 1}];
+    });
+  }
+
+  function handleChangeQuantity(id: number, delta: number) {
+    setCart((prev) =>
+      prev
+        .map((i) => i.product.id === id ? {...i, quantity: i.quantity + delta} : i)
+        .filter((i) => i.quantity > 0)
+    );
+  }
+
+  const totalSum = cart.reduce((sum, i) => {
+    const price = i.product.prices?.[0]?.price ?? 0;
+    return sum + price * i.quantity;
+  }, 0);
 
   return (
     <main className="min-h-screen bg-[#f6f7fb] text-foreground">
@@ -161,16 +232,50 @@ export default function Home() {
             />
             <FieldGroup className="mt-4 gap-4">
               <Field className="gap-2">
-                <FieldLabel className="text-xs text-muted-foreground">
-                  Телефон
-                </FieldLabel>
+                <FieldLabel className="text-xs text-muted-foreground">Телефон</FieldLabel>
                 <div className="relative">
                   <Search
                     className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"/>
-                  <Input className="h-10 pl-9" placeholder="+74951234567"/>
+                  {isPhoneLoading && (
+                    <div
+                      className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent"/>
+                  )}
+                  <Input
+                    className="h-10 pl-9"
+                    placeholder="+74951234567"
+                    value={phoneQuery}
+                    disabled={!isConnected}
+                    onChange={(e) => handlePhoneSearch(e.target.value)}
+                  />
                 </div>
               </Field>
-              <SelectStub label="Найденный клиент" value="Клиент не выбран"/>
+
+              {contragent && (
+                <div className="flex items-center gap-3 rounded-md border bg-muted/30 px-3 py-2.5">
+                  <UserRound className="size-4 shrink-0 text-muted-foreground"/>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{contragent.name}</p>
+                    <p className="text-xs text-muted-foreground">{contragent.phone}</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="ml-auto shrink-0 text-muted-foreground"
+                    onClick={() => {
+                      setContragent(null);
+                      setPhoneQuery("");
+                    }}
+                  >✕</Button>
+                </div>
+              )}
+
+              {phoneError && (
+                <p className="text-xs text-destructive">{phoneError}</p>
+              )}
+
+              {!isConnected && (
+                <p className="text-xs text-muted-foreground">Подключите кассу для поиска клиентов</p>
+              )}
             </FieldGroup>
           </section>
 
@@ -252,13 +357,69 @@ export default function Home() {
               title="4. Товары"
               description="Поиск и добавление номенклатуры"
             />
-            <div className="mt-4 rounded-md border border-dashed bg-muted/30 px-4 py-8 text-center">
-              <PackageSearch className="mx-auto size-8 text-muted-foreground/70"/>
-              <p className="mt-3 text-sm font-medium">Товары не найдены</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Начните вводить название или артикул
-              </p>
-            </div>
+
+            {!isConnected && (
+              <div className="mt-4 rounded-md border border-dashed bg-muted/30 px-4 py-8 text-center">
+                <PackageSearch className="mx-auto size-8 text-muted-foreground/70"/>
+                <p className="mt-3 text-sm font-medium">Подключите кассу</p>
+              </div>
+            )}
+
+            {isDictionariesLoading && (
+              <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+                <div
+                  className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent"/>
+                Загружаем товары...
+              </div>
+            )}
+
+            {isConnected && !isDictionariesLoading && (
+              <>
+                <div className="relative mt-4">
+                  <Search
+                    className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"/>
+                  <Input
+                    className="h-10 pl-9"
+                    placeholder="Название или артикул"
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                  />
+                </div>
+
+                {filteredProducts.length > 0 ? (
+                  <ul className="mt-3 max-h-[280px] divide-y overflow-y-auto rounded-md border">
+                    {filteredProducts.map((p) => (
+                      <li key={p.id} className="flex items-center gap-2 px-3 py-2.5">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{p.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {p.code && <span>Арт: {p.code}</span>}
+                            {p.unit_name && <span> · {p.unit_name}</span>}
+                            {p.prices?.[0] && (
+                              <span className="ml-1 font-medium text-foreground">
+                      {p.prices[0].price.toLocaleString("ru-RU")} ₽
+                    </span>
+                            )}
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 w-8 shrink-0 p-0 text-base"
+                          onClick={() => handleAddToCart(p)}
+                        >+</Button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="mt-4 rounded-md border border-dashed bg-muted/30 px-4 py-8 text-center">
+                    <PackageSearch className="mx-auto size-8 text-muted-foreground/70"/>
+                    <p className="mt-3 text-sm font-medium">Ничего не найдено</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Попробуйте другой запрос</p>
+                  </div>
+                )}
+              </>
+            )}
           </section>
 
           <section className="rounded-lg border bg-card p-4 shadow-xs">
@@ -267,9 +428,35 @@ export default function Home() {
               title="Корзина"
               description="Количество, цена и сумма по позициям"
             />
-            <div className="mt-4 rounded-md bg-muted/40 px-4 py-6 text-center text-sm text-muted-foreground">
-              Добавьте хотя бы один товар
-            </div>
+
+            {cart.length === 0 ? (
+              <div className="mt-4 rounded-md bg-muted/40 px-4 py-6 text-center text-sm text-muted-foreground">
+                Добавьте хотя бы один товар
+              </div>
+            ) : (
+              <ul className="mt-4 divide-y rounded-md border">
+                {cart.map(({product, quantity}) => (
+                  <li key={product.id} className="flex items-center gap-2 px-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{product.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {(product.prices?.[0]?.price ?? 0).toLocaleString("ru-RU")} ₽ · {product.unit_name}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button size="sm" variant="outline" className="h-7 w-7 p-0"
+                              onClick={() => handleChangeQuantity(product.id, -1)}>−</Button>
+                      <span className="w-6 text-center text-sm">{quantity}</span>
+                      <Button size="sm" variant="outline" className="h-7 w-7 p-0"
+                              onClick={() => handleChangeQuantity(product.id, +1)}>+</Button>
+                    </div>
+                    <span className="w-20 text-right text-sm font-medium">
+            {((product.prices?.[0]?.price ?? 0) * quantity).toLocaleString("ru-RU")} ₽
+          </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
 
           <Field className="gap-2 rounded-lg border bg-card p-4 shadow-xs">
@@ -291,7 +478,7 @@ export default function Home() {
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Итого</span>
             <strong className="text-2xl font-semibold tracking-tight">
-              0,00 ₽
+              {totalSum.toLocaleString("ru-RU", {minimumFractionDigits: 2})} ₽
             </strong>
           </div>
           <Separator/>

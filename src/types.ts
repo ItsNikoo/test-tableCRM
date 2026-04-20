@@ -32,7 +32,33 @@ export interface PriceType {
   name: string;
 }
 
+export interface Product {
+  id: number;
+  name: string;
+  code: string;
+  description_short: string;
+  type: string;
+  unit_name: string;
+  barcodes: string[];
+  prices: { price: number; price_type: string }[];
+  balances: { warehouse_name: string; current_amount: number }[];
+  category: number;
+  group_name: string;
+}
+
+export interface Contragent {
+  id: number;
+  name: string;
+  phone: string;
+  email?: string;
+}
+
 export interface ApiListResponse<T> {
   result: T[];
   count: number;
+}
+
+export interface CartItem {
+  product: Product;
+  quantity: number;
 }
