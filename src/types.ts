@@ -38,6 +38,7 @@ export interface Product {
   code: string;
   description_short: string;
   type: string;
+  unit: number;
   unit_name: string;
   barcodes: string[];
   prices: { price: number; price_type: string }[];

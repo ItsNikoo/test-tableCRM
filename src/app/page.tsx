@@ -7,63 +7,75 @@ import {
   Store,
   UserRound,
   WalletCards,
-} from "lucide-react";
+} from "lucide-react"
 
-import {Button} from "@/components/ui/button";
+import {Button} from "@/components/ui/button"
 import {
   Field,
   FieldDescription,
   FieldGroup,
   FieldLabel,
-} from "@/components/ui/field";
-import {Input} from "@/components/ui/input";
-import {Separator} from "@/components/ui/separator";
-import {SectionHeader} from "@/components/customUI/SectionHeader";
-import {useEffect, useState} from "react";
-import {apiRequest} from "@/lib/apiRequest";
-import {toast} from "sonner";
-import {ApiListResponse, CartItem, Contragent, Organization, Paybox, PriceType, Product, Warehouse} from "@/types";
+} from "@/components/ui/field"
+import {Input} from "@/components/ui/input"
+import {Separator} from "@/components/ui/separator"
+import {SectionHeader} from "@/components/customUI/SectionHeader"
+import {useCallback, useEffect, useState} from "react"
+import {apiRequest} from "@/lib/apiRequest"
+import {toast} from "sonner"
+import {ApiListResponse, CartItem, Contragent, Organization, Paybox, PriceType, Product, Warehouse} from "@/types"
 
 
 export default function Home() {
+  // Работа с токеном
   const [tokenQuery, setTokenQuery] = useState<string>("")
   const [token, setToken] = useState<string>("")
   const [isLoading, setIsLoading] = useState(false)
   const [isConnected, setIsConnected] = useState(false)
 
-  const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [payboxes, setPayboxes] = useState<Paybox[]>([]);
-  const [priceTypes, setPriceTypes] = useState<PriceType[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
+  // Словари (организации, склады и т.д.)
+  const [organizations, setOrganizations] = useState<Organization[]>([])
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([])
+  const [payboxes, setPayboxes] = useState<Paybox[]>([])
+  const [priceTypes, setPriceTypes] = useState<PriceType[]>([])
+  const [products, setProducts] = useState<Product[]>([])
 
-  const [productSearch, setProductSearch] = useState("");
+  const [productSearch, setProductSearch] = useState("")
 
-  const [isDictionariesLoading, setIsDictionariesLoading] = useState(false);
-  const [dictionariesError, setDictionariesError] = useState("");
+  const [isDictionariesLoading, setIsDictionariesLoading] = useState(false)
+  const [dictionariesError, setDictionariesError] = useState("")
 
-  const [phoneQuery, setPhoneQuery] = useState("");
-  const [contragent, setContragent] = useState<Contragent | null>(null);
-  const [isPhoneLoading, setIsPhoneLoading] = useState(false);
-  const [phoneError, setPhoneError] = useState("");
+  // Телефон
+  const [phoneQuery, setPhoneQuery] = useState("")
+  const [contragent, setContragent] = useState<Contragent | null>(null)
+  const [isPhoneLoading, setIsPhoneLoading] = useState(false)
+  const [phoneError, setPhoneError] = useState("")
 
-  const [cart, setCart] = useState<CartItem[]>([]);
+  // Корзина
+  const [cart, setCart] = useState<CartItem[]>([])
+
+  // POST запрос
+  const [selectedOrg, setSelectedOrg] = useState<number | "">("")
+  const [selectedWarehouse, setSelectedWarehouse] = useState<number | "">("")
+  const [selectedPaybox, setSelectedPaybox] = useState<number | "">("")
+  const [selectedPriceType, setSelectedPriceType] = useState<number | "">("")
+  const [comment, setComment] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const filteredProducts = products.filter((p) => {
-    const q = productSearch.toLowerCase();
+    const q = productSearch.toLowerCase()
     return (
       p.name.toLowerCase().includes(q) ||
       p.code?.toLowerCase().includes(q) ||
       p.barcodes?.some((b) => b.includes(q))
-    );
-  });
+    )
+  })
 
   useEffect(() => {
-    if (!token) return;
+    if (!token) return
 
     async function fetchDictionaries() {
-      setIsDictionariesLoading(true);
-      setDictionariesError("");
+      setIsDictionariesLoading(true)
+      setDictionariesError("")
 
       try {
         const [
@@ -77,81 +89,87 @@ export default function Home() {
           apiRequest<ApiListResponse<Warehouse>>("warehouses/", {token}),
           apiRequest<ApiListResponse<Paybox>>("payboxes/", {token}),
           apiRequest<ApiListResponse<PriceType>>("price_types/", {token}),
-          apiRequest<ApiListResponse<Product>>("nomenclature/", {token}),
-        ]);
+          apiRequest<ApiListResponse<Product>>("nomenclature/", {
+            token,
+            query: {
+              with_prices: "true",
+              with_balance: "true",
+            },
+          }),
+        ])
 
-        setOrganizations(organizationsData.result);
-        setWarehouses(warehousesData.result);
-        setPayboxes(payboxesData.result);
-        setPriceTypes(priceTypesData.result);
-        setProducts(productsData.result);
+        setOrganizations(organizationsData.result)
+        setWarehouses(warehousesData.result)
+        setPayboxes(payboxesData.result)
+        setPriceTypes(priceTypesData.result)
+        setProducts(productsData.result)
       } catch (error) {
-        setDictionariesError("Не удалось загрузить справочники");
-        console.error(error);
+        setDictionariesError("Не удалось загрузить справочники")
+        console.error(error)
       } finally {
-        setIsDictionariesLoading(false);
+        setIsDictionariesLoading(false)
       }
     }
 
-    fetchDictionaries();
-  }, [token]);
+    fetchDictionaries()
+  }, [token])
 
   async function handleConnect() {
     setIsLoading(true)
     setIsConnected(false)
 
     try {
-      await apiRequest("users/", {token: tokenQuery});
-      setToken(tokenQuery);
-      setIsConnected(true);
-      toast.success("Касса подключена");
+      await apiRequest("users/", {token: tokenQuery})
+      setToken(tokenQuery)
+      setIsConnected(true)
+      toast.success("Касса подключена")
     } catch (error) {
-      setIsConnected(false);
-      const message = error instanceof Error ? error.message : "Неверный токен";
-      toast.error(message);
+      setIsConnected(false)
+      const message = error instanceof Error ? error.message : "Неверный токен"
+      toast.error(message)
     } finally {
       setIsLoading(false)
     }
   }
 
   async function handlePhoneSearch(phone: string) {
-    setPhoneQuery(phone);
-    setContragent(null);
-    setPhoneError("");
+    setPhoneQuery(phone)
+    setContragent(null)
+    setPhoneError("")
 
-    if (phone.length < 6) return;
+    if (phone.length < 6) return
 
-    setIsPhoneLoading(true);
+    setIsPhoneLoading(true)
     try {
       const data = await apiRequest<ApiListResponse<Contragent>>("contragents/", {
         token,
         method: "GET",
-      });
+      })
       const found = data.result.find((c) =>
         c.phone?.replace(/\D/g, "").includes(phone.replace(/\D/g, ""))
-      );
+      )
       if (found) {
-        setContragent(found);
+        setContragent(found)
       } else {
-        setPhoneError("Клиент не найден");
+        setPhoneError("Клиент не найден")
       }
     } catch {
-      setPhoneError("Ошибка поиска");
+      setPhoneError("Ошибка поиска")
     } finally {
-      setIsPhoneLoading(false);
+      setIsPhoneLoading(false)
     }
   }
 
   function handleAddToCart(product: Product) {
     setCart((prev) => {
-      const existing = prev.find((i) => i.product.id === product.id);
+      const existing = prev.find((i) => i.product.id === product.id)
       if (existing) {
         return prev.map((i) =>
           i.product.id === product.id ? {...i, quantity: i.quantity + 1} : i
-        );
+        )
       }
-      return [...prev, {product, quantity: 1}];
-    });
+      return [...prev, {product, quantity: 1}]
+    })
   }
 
   function handleChangeQuantity(id: number, delta: number) {
@@ -159,13 +177,76 @@ export default function Home() {
       prev
         .map((i) => i.product.id === id ? {...i, quantity: i.quantity + delta} : i)
         .filter((i) => i.quantity > 0)
-    );
+    )
   }
 
   const totalSum = cart.reduce((sum, i) => {
-    const price = i.product.prices?.[0]?.price ?? 0;
-    return sum + price * i.quantity;
-  }, 0);
+    const price = i.product.prices?.[0]?.price ?? 0
+    return sum + price * i.quantity
+  }, 0)
+
+  const handleSubmit = useCallback(async (conduct: boolean) => {
+    if (!selectedOrg || !selectedWarehouse || !selectedPaybox) {
+      toast.error("Заполните организацию, счёт и склад")
+      return
+    }
+    if (cart.length === 0) {
+      toast.error("Добавьте хотя бы один товар")
+      return
+    }
+
+    setIsSubmitting(true)
+
+    const payload = [
+      {
+        dated: Math.floor(Date.now() / 1000),
+        warehouse: selectedWarehouse,
+        organization: selectedOrg,
+        paybox: selectedPaybox,
+        status: conduct,
+        goods: cart.map((i) => ({
+          nomenclature: i.product.id,
+          quantity: i.quantity,
+          price: i.product.prices?.[0]?.price ?? 0,
+        })),
+      },
+    ]
+
+    try {
+      const response = await fetch("/api/create-sale", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          token,
+          payload,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          typeof result?.message === "string"
+            ? result.message
+            : "Ошибка создания продажи"
+        )
+      }
+
+      toast.success(conduct ? "Продажа создана и проведена" : "Продажа создана")
+      setCart([])
+      setContragent(null)
+      setPhoneQuery("")
+      setComment("")
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Ошибка создания продажи"
+      toast.error(message)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }, [selectedOrg, selectedWarehouse, selectedPaybox, cart, token])
 
   return (
     <main className="min-h-screen bg-[#f6f7fb] text-foreground">
@@ -262,8 +343,8 @@ export default function Home() {
                     variant="ghost"
                     className="ml-auto shrink-0 text-muted-foreground"
                     onClick={() => {
-                      setContragent(null);
-                      setPhoneQuery("");
+                      setContragent(null)
+                      setPhoneQuery("")
                     }}
                   >✕</Button>
                 </div>
@@ -307,6 +388,8 @@ export default function Home() {
                 <Field className="gap-2">
                   <FieldLabel className="text-xs text-muted-foreground">Организация</FieldLabel>
                   <select
+                    value={selectedOrg}
+                    onChange={(e) => setSelectedOrg(Number(e.target.value))}
                     className="h-10 w-full rounded-md border bg-background px-3 text-sm shadow-xs outline-none focus-visible:border-ring">
                     <option value="">Выберите...</option>
                     {organizations.map((o) => (
@@ -318,6 +401,8 @@ export default function Home() {
                 <Field className="gap-2">
                   <FieldLabel className="text-xs text-muted-foreground">Счёт</FieldLabel>
                   <select
+                    value={selectedPaybox}
+                    onChange={(e) => setSelectedPaybox(Number(e.target.value))}
                     className="h-10 w-full rounded-md border bg-background px-3 text-sm shadow-xs outline-none focus-visible:border-ring">
                     <option value="">Выберите...</option>
                     {payboxes.map((p) => (
@@ -329,6 +414,8 @@ export default function Home() {
                 <Field className="gap-2">
                   <FieldLabel className="text-xs text-muted-foreground">Склад</FieldLabel>
                   <select
+                    value={selectedWarehouse}
+                    onChange={(e) => setSelectedWarehouse(Number(e.target.value))}
                     className="h-10 w-full rounded-md border bg-background px-3 text-sm shadow-xs outline-none focus-visible:border-ring">
                     <option value="">Выберите...</option>
                     {warehouses.map((w) => (
@@ -340,6 +427,8 @@ export default function Home() {
                 <Field className="gap-2">
                   <FieldLabel className="text-xs text-muted-foreground">Тип цены</FieldLabel>
                   <select
+                    value={selectedPriceType}
+                    onChange={(e) => setSelectedPriceType(Number(e.target.value))}
                     className="h-10 w-full rounded-md border bg-background px-3 text-sm shadow-xs outline-none focus-visible:border-ring">
                     <option value="">Выберите...</option>
                     {priceTypes.map((pt) => (
@@ -462,6 +551,8 @@ export default function Home() {
           <Field className="gap-2 rounded-lg border bg-card p-4 shadow-xs">
             <FieldLabel>Комментарий</FieldLabel>
             <textarea
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
               className="min-h-24 w-full resize-none rounded-md border bg-background px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
               placeholder="Комментарий к продаже"
             />
@@ -483,13 +574,25 @@ export default function Home() {
           </div>
           <Separator/>
           <div className="grid grid-cols-2 gap-2">
-            <Button variant="outline" className="h-11">
-              Создать продажу
+            <Button
+              variant="outline"
+              className="h-11"
+              disabled={isSubmitting || !isConnected}
+              onClick={() => handleSubmit(false)}
+            >
+              {isSubmitting ? "Создаём..." : "Создать продажу"}
             </Button>
-            <Button className="h-11">Создать и провести</Button>
+
+            <Button
+              className="h-11"
+              disabled={isSubmitting || !isConnected}
+              onClick={() => handleSubmit(true)}
+            >
+              {isSubmitting ? "Проводим..." : "Создать и провести"}
+            </Button>
           </div>
         </div>
       </footer>
     </main>
-  );
+  )
 }

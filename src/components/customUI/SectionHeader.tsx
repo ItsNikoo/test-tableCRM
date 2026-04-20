@@ -1,4 +1,4 @@
-import {Store} from "lucide-react";
+import {Store} from "lucide-react"
 
 interface SectionHeaderProps {
   icon: typeof Store;
@@ -20,5 +20,5 @@ export function SectionHeader({icon: Icon, title, description}: SectionHeaderPro
         </p>
       </div>
     </div>
-  );
+  )
 }

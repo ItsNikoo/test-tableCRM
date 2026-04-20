@@ -1,18 +1,33 @@
-const BASE_URL = "https://app.tablecrm.com/api/v1";
+const BASE_URL = "https://app.tablecrm.com/api/v1"
+
+type ApiErrorDetailItem = {
+  msg?: string;
+  loc?: Array<string | number>;
+  type?: string;
+};
 
 interface ApiRequestOptions extends Omit<RequestInit, "method"> {
   token: string;
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   data?: unknown;
+  query?: Record<string, string>;
 }
 
 export async function apiRequest<T>(
   path: string,
-  { token, data, method = "GET", ...options }: ApiRequestOptions
+  { token, data, method = "GET", query, ...options }: ApiRequestOptions
 ): Promise<T> {
-  const url = `${BASE_URL}/${path}?token=${token}`;
+  const url = new URL(`${BASE_URL}/${path}`)
 
-  const response = await fetch(url, {
+  url.searchParams.set("token", token)
+
+  if (query) {
+    Object.entries(query).forEach(([key, value]) => {
+      url.searchParams.set(key, value)
+    })
+  }
+
+  const response = await fetch(url.toString(), {
     ...options,
     method,
     headers: {
@@ -20,20 +35,36 @@ export async function apiRequest<T>(
       ...(options.headers || {}),
     },
     body: data ? JSON.stringify(data) : options.body,
-  });
+  })
 
   if (!response.ok) {
-    const text = await response.text();
-    let message = text;
+    const text = await response.text()
+    let message = text
 
     try {
-      const json = JSON.parse(text);
-      message = json.detail || text;
+      const json: { detail?: string | ApiErrorDetailItem[]; message?: string } = JSON.parse(text)
+
+      if (typeof json.detail === "string") {
+        message = json.detail
+      } else if (Array.isArray(json.detail)) {
+        message = json.detail
+          .map((item) => {
+            if (item.msg && Array.isArray(item.loc)) {
+              return `${item.loc.join(".")}: ${item.msg}`
+            }
+            if (item.msg) return item.msg
+            return JSON.stringify(item)
+          })
+          .join("; ")
+      } else if (json.message) {
+        message = json.message
+      }
     } catch {
+      //
     }
 
-    throw new Error(message || `Ошибка ${response.status}`);
+    throw new Error(message || `Ошибка ${response.status}`)
   }
 
-  return response.json();
+  return response.json()
 }

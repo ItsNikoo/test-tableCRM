@@ -1,5 +1,5 @@
-import {Field, FieldLabel} from "@/components/ui/field";
-import {ChevronDown} from "lucide-react";
+import {Field, FieldLabel} from "@/components/ui/field"
+import {ChevronDown} from "lucide-react"
 
 interface SelectStubProps {
   label: string
@@ -16,5 +16,5 @@ export function SelectStub({label, value = "Выберите"}: SelectStubProps)
         <ChevronDown className="size-4 shrink-0 text-muted-foreground"/>
       </button>
     </Field>
-  );
+  )
 }
